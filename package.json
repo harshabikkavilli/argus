@@ -1,0 +1,45 @@
+{
+	"name": "argus",
+	"version": "0.1.0",
+	"description": "Debug, replay, and understand every MCP tool call - Datadog for MCPs",
+	"type": "module",
+	"main": "dist/app/cli/index.js",
+	"bin": {
+		"argus": "./dist/app/cli/index.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev:test-server": "tsx src/devtools/test-server.ts",
+		"start": "tsx src/app/cli/index.ts",
+		"inspect": "tsx src/app/cli/index.ts",
+		"call": "tsx src/devtools/test-client.ts",
+		"rebuild": "npm rebuild better-sqlite3",
+		"rebuild:all": "echo 'Rebuilding for all Node versions. Run: nvm use <version> && npm rebuild better-sqlite3'"
+	},
+	"keywords": [
+		"mcp",
+		"model-context-protocol",
+		"debugging",
+		"monitoring",
+		"proxy",
+		"argus"
+	],
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.25.1",
+		"better-sqlite3": "^12.5.0",
+		"chalk": "^5.6.2",
+		"commander": "^13.1.0",
+		"express": "^5.2.1",
+		"uuid": "^13.0.0"
+	},
+	"devDependencies": {
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/express": "^5.0.6",
+		"@types/node": "^25.0.3",
+		"@types/uuid": "^10.0.0",
+		"tsx": "^4.21.0",
+		"typescript": "^5.9.3"
+	}
+}
