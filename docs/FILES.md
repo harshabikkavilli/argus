@@ -67,7 +67,23 @@ Applications built on infrastructure.
 | `app/dashboard/routes/stats.ts`        | Statistics API endpoints                   | ✅ Active |
 | `app/dashboard/routes/replay.ts`       | Replay API endpoints                       | ✅ Active |
 | `app/dashboard/realtime/sseManager.ts` | Server-Sent Events manager                 | ✅ Active |
-| `app/dashboard/ui/index.ts`            | Embedded web UI (HTML/CSS/JavaScript)      | ✅ Active |
+| `app/dashboard/ui/index.ts`            | ~~Embedded web UI (HTML/CSS/JavaScript)~~  | ❌ Removed (replaced by React app in `web/`) |
+
+## Web Application (`web/`)
+
+| File/Directory              | Purpose                                    | Status    |
+| --------------------------- | ------------------------------------------ | --------- |
+| `web/src/main.tsx`          | React app entry point                      | ✅ Active |
+| `web/src/App.tsx`           | Root React component                       | ✅ Active |
+| `web/src/components/`       | React components (layout, calls, runs, etc)| ✅ Active |
+| `web/src/hooks/`            | Custom React hooks (SSE, data fetching)    | ✅ Active |
+| `web/src/context/`          | React context for global state             | ✅ Active |
+| `web/src/api/`              | API client functions                       | ✅ Active |
+| `web/src/types/`            | TypeScript type definitions                | ✅ Active |
+| `web/src/styles/`           | Tailwind CSS and global styles             | ✅ Active |
+| `web/vite.config.ts`        | Vite build configuration                   | ✅ Active |
+| `web/tailwind.config.js`    | Tailwind CSS configuration                 | ✅ Active |
+| `web/index.html`            | HTML entry point                           | ✅ Active |
 
 ## Configuration (`src/config/`)
 

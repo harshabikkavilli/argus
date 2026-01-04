@@ -143,14 +143,37 @@ Applications built on top of infrastructure:
   - `replay.ts` - Replay endpoints
   - `index.ts` - Route aggregator
 - `realtime/sseManager.ts` - Server-Sent Events manager
-- `ui/index.ts` - Embedded web UI (HTML/CSS/JS)
+- ~~`ui/index.ts`~~ - Removed (replaced by React app in `web/`)
 
 **Features**:
 
 - REST API for querying recordings
 - Real-time updates via SSE
-- Web UI for visualization
 - Replay functionality
+
+### Web Application (`web/`)
+
+React + Vite application for the dashboard UI.
+
+**Structure**:
+- `src/main.tsx` - Entry point
+- `src/App.tsx` - Root component
+- `src/components/` - React components (layout, calls, runs, stats, common)
+- `src/hooks/` - Custom hooks (useSSE, useRuns, useCalls, useStats)
+- `src/context/` - React Context for global state
+- `src/api/` - API client functions
+- `src/types/` - TypeScript type definitions
+- `src/styles/` - Tailwind CSS styles
+- `vite.config.ts` - Vite build configuration
+- `tailwind.config.js` - Tailwind configuration
+
+**Features**:
+- Component-based React architecture
+- Real-time updates via SSE
+- Multi-panel layout (sidebar, main, detail)
+- Tool call visualization and replay
+- Run management and filtering
+- Statistics dashboard
 
 ### Configuration (`src/config/`)
 
@@ -190,7 +213,7 @@ User → npx tsx src/app/cli/index.ts dashboard
       → app/dashboard/server.ts (starts Express server)
         → app/dashboard/routes/ (API routes)
         → app/dashboard/realtime/sseManager.ts (SSE)
-        → app/dashboard/ui/index.ts (serves UI)
+        → dist/web/ (serves built React app)
 ```
 
 ### Proxy Mode (Wrap Command)

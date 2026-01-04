@@ -47,6 +47,7 @@ program
 	.argument('[args...]', 'Arguments for the MCP server command')
 	.option('-d, --db <path>', 'Database file path')
 	.option('-a, --api <url>', 'API server URL for SSE notifications')
+	.option('-P, --proxy-port <port>', 'Port for proxy API server (for replay)', '3001')
 	.option(
 		'-t, --idle-timeout <seconds>',
 		'Idle timeout before starting new run',

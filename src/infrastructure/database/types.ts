@@ -55,6 +55,9 @@ export interface DatabaseAdapter {
 	getToolBreakdown(runId?: string): ToolStats[];
 	getRunStats(): RunStats;
 
+	// Servers
+	listServers(): { name: string; call_count: number; last_seen: number }[];
+
 	// Cleanup
 	clearAll(): void;
 

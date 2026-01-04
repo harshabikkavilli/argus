@@ -269,6 +269,23 @@ export class SQLiteAdapter implements DatabaseAdapter {
 			.get() as RunStats;
 	}
 
+	// =========== Servers ===========
+
+	listServers(): { name: string; call_count: number; last_seen: number }[] {
+		return this.db
+			.prepare(
+				`SELECT 
+					mcp_server as name,
+					COUNT(*) as call_count,
+					MAX(timestamp) as last_seen
+				FROM tool_calls
+				WHERE mcp_server IS NOT NULL AND mcp_server != ''
+				GROUP BY mcp_server
+				ORDER BY call_count DESC`
+			)
+			.all() as { name: string; call_count: number; last_seen: number }[];
+	}
+
 	// =========== Cleanup ===========
 
 	clearAll(): void {

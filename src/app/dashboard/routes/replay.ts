@@ -1,12 +1,11 @@
 /**
- * Replay API routes (require proxy context)
+ * Replay API routes
+ * Proxies to the wrap command's API server for actual replay execution
  */
 
 import {Router, Request, Response} from 'express';
-import {v4 as uuidv4} from 'uuid';
-import type {DatabaseAdapter, ToolCallRecord} from '../../../infrastructure/database/types.js';
-import {diffJson, type DiffResult} from '../../../core/replay/diff.js';
-import {redact, type RedactionConfig} from '../../../core/redaction/redactor.js';
+import {request} from 'http';
+import type {DatabaseAdapter} from '../../../infrastructure/database/types.js';
 
 export interface ReplayContext {
 	callTool?: (
@@ -15,127 +14,103 @@ export interface ReplayContext {
 	) => Promise<unknown>;
 	getRunIdForActivity?: () => string | null;
 	incrementToolCount?: (hasError: boolean) => void;
-	redactionConfig?: RedactionConfig;
 }
+
+// Default proxy API port (where wrap command listens)
+const PROXY_API_PORT = 3001;
 
 export function createReplayRoutes(
 	db: DatabaseAdapter,
-	getReplayContext: () => ReplayContext | null
+	_getReplayContext?: () => ReplayContext | null
 ): Router {
 	const router = Router();
 
-	// Start a new run manually
+	// Start a new run manually - requires direct proxy context
 	router.post('/runs/start', (_req: Request, res: Response) => {
-		const ctx = getReplayContext();
-		if (!ctx?.getRunIdForActivity) {
-			res.status(503).json({error: 'Proxy not running'});
-			return;
-		}
-
-		const runId = ctx.getRunIdForActivity();
-		res.json({run_id: runId});
+		// This requires the proxy to be running in the same process
+		// For now, just return an error since we don't have that capability
+		res.status(503).json({
+			error: 'Not supported in standalone mode',
+			message: 'Starting runs manually requires the proxy and dashboard to run together.'
+		});
 	});
 
-	// Replay a tool call
+	// Replay a tool call - proxies to wrap command's API
 	router.post('/calls/:id/replay', async (req: Request, res: Response) => {
-		const call = db.getToolCall(req.params.id);
+		const callId = req.params.id;
 
+		// First check if the call exists
+		const call = db.getToolCall(callId);
 		if (!call) {
 			res.status(404).json({error: 'Call not found'});
 			return;
 		}
 
-		const ctx = getReplayContext();
-		if (!ctx?.callTool) {
-			res.status(503).json({error: 'Proxy not running - cannot replay'});
-			return;
-		}
-
+		// Try to call the proxy API
 		try {
-			const params = JSON.parse(call.params);
-			const startTime = Date.now();
-
-			// Replay the call
-			const result = await ctx.callTool(call.tool_name, params);
-
-			const latency = Date.now() - startTime;
-
-			// Redact before storing
-			const redactionConfig =
-				ctx.redactionConfig || {enabled: true, sensitiveKeys: []};
-			const redactedParams = JSON.stringify(redact(params, redactionConfig));
-			const redactedResult = JSON.stringify(redact(result, redactionConfig));
-
-			// Record replayed call
-			const replayId = uuidv4();
-			const replayRecord: ToolCallRecord = {
-				id: replayId,
-				timestamp: startTime,
-				tool_name: call.tool_name,
-				params: redactedParams,
-				result: redactedResult,
-				error: null,
-				latency_ms: latency,
-				mcp_server: call.mcp_server,
-				run_id: ctx.getRunIdForActivity?.() || null,
-				replayed_from: call.id
-			};
-
-			db.insertToolCall(replayRecord);
-			if (ctx.incrementToolCount) {
-				ctx.incrementToolCount(false);
+			const proxyResponse = await callProxyAPI(callId);
+			res.json(proxyResponse);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			
+			if (message.includes('ECONNREFUSED')) {
+				res.status(503).json({
+					error: 'Proxy not connected',
+					message: 'Replay requires an active proxy connection. Make sure Claude Desktop is running with a wrapped MCP server.'
+				});
+			} else {
+				res.status(500).json({error: message});
 			}
-
-			// Compare with original
-			const originalResult = call.result ? JSON.parse(call.result) : null;
-			const diff: DiffResult = diffJson(originalResult, result);
-
-			res.json({
-				replay_id: replayId,
-				original_latency: call.latency_ms,
-				replay_latency: latency,
-				result_changed: diff.changed,
-				diff: diff.changes,
-				result: result
-			});
-		} catch (error: unknown) {
-			const errorMsg = error instanceof Error ? error.message : String(error);
-			const latency = Date.now() - Date.now(); // Will be 0, but keeping structure
-
-			// Record failed replay
-			const replayId = uuidv4();
-			const params = JSON.parse(call.params);
-			const redactionConfig =
-				ctx?.redactionConfig || {enabled: true, sensitiveKeys: []};
-			const redactedParams = JSON.stringify(redact(params, redactionConfig));
-
-			const replayRecord: ToolCallRecord = {
-				id: replayId,
-				timestamp: Date.now(),
-				tool_name: call.tool_name,
-				params: redactedParams,
-				result: null,
-				error: errorMsg,
-				latency_ms: latency,
-				mcp_server: call.mcp_server,
-				run_id: ctx?.getRunIdForActivity?.() || null,
-				replayed_from: call.id
-			};
-
-			db.insertToolCall(replayRecord);
-			if (ctx?.incrementToolCount) {
-				ctx.incrementToolCount(true);
-			}
-
-			res.status(500).json({
-				replay_id: replayId,
-				error: errorMsg,
-				original_latency: call.latency_ms,
-				replay_latency: latency
-			});
 		}
 	});
 
 	return router;
 }
 
+/**
+ * Call the wrap command's proxy API for replay
+ */
+function callProxyAPI(callId: string): Promise<unknown> {
+	return new Promise((resolve, reject) => {
+		const options = {
+			hostname: 'localhost',
+			port: PROXY_API_PORT,
+			path: `/replay/${callId}`,
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			timeout: 30000 // 30 second timeout for replay
+		};
+
+		const req = request(options, (res) => {
+			let data = '';
+			res.on('data', (chunk) => {
+				data += chunk;
+			});
+			res.on('end', () => {
+				try {
+					const parsed = JSON.parse(data);
+					if (res.statusCode === 200) {
+						resolve(parsed);
+					} else {
+						reject(new Error(parsed.error || `HTTP ${res.statusCode}`));
+					}
+				} catch {
+					reject(new Error('Invalid response from proxy'));
+				}
+			});
+		});
+
+		req.on('error', (error) => {
+			reject(error);
+		});
+
+		req.on('timeout', () => {
+			req.destroy();
+			reject(new Error('Replay request timed out'));
+		});
+
+		req.end();
+	});
+}

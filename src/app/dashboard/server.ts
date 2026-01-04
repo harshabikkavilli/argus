@@ -4,10 +4,14 @@
  */
 
 import express, {Express, Request, Response} from 'express';
+import {join, dirname} from 'path';
+import {fileURLToPath} from 'url';
 import type {DatabaseAdapter} from '../../infrastructure/database/types.js';
 import {createDashboardRoutes, type ReplayContext} from './routes/index.js';
 import {createSSEManager, type SSEManager} from './realtime/sseManager.js';
-import {getUIHTML} from './ui/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export interface DashboardServerOptions {
 	port?: number;
@@ -30,11 +34,6 @@ export function createDashboardServer(
 		res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
 		res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 		next();
-	});
-
-	// Serve UI
-	app.get('/', (_req: Request, res: Response) => {
-		res.send(getUIHTML());
 	});
 
 	// SSE endpoint
@@ -65,6 +64,20 @@ export function createDashboardServer(
 
 	// Mount API routes
 	app.use('/api', createDashboardRoutes(db, options.getReplayContext));
+
+	// Serve static files from dist/web (built React app)
+	const webDistPath = join(__dirname, '../../../../dist/web');
+	app.use(express.static(webDistPath));
+
+	// SPA fallback: serve index.html for all non-API routes
+	app.use((req: Request, res: Response, next) => {
+		// Don't serve index.html for API routes
+		if (req.path.startsWith('/api')) {
+			return next();
+		}
+		// For all other routes, serve the React app
+		res.sendFile(join(webDistPath, 'index.html'));
+	});
 
 	return {app, sse};
 }

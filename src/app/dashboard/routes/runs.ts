@@ -2,7 +2,7 @@
  * Runs API routes
  */
 
-import {Router, Request, Response} from 'express';
+import {Request, Response, Router} from 'express';
 import type {DatabaseAdapter} from '../../../infrastructure/database/types.js';
 
 export function createRunsRoutes(db: DatabaseAdapter): Router {
@@ -45,6 +45,28 @@ export function createRunsRoutes(db: DatabaseAdapter): Router {
 		});
 	});
 
+	// Stop a run manually
+	router.post('/:id/stop', (req: Request, res: Response) => {
+		const run = db.getRun(req.params.id);
+
+		if (!run) {
+			res.status(404).json({error: 'Run not found'});
+			return;
+		}
+
+		if (run.status !== 'active') {
+			res.json({message: 'Run already stopped', run});
+			return;
+		}
+
+		db.updateRun(req.params.id, {
+			ended_at: Date.now(),
+			status: 'manual_stopped'
+		});
+
+		const updatedRun = db.getRun(req.params.id);
+		res.json({message: 'Run stopped', run: updatedRun});
+	});
+
 	return router;
 }
-

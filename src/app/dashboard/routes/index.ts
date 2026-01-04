@@ -7,6 +7,7 @@ import type {DatabaseAdapter} from '../../../infrastructure/database/types.js';
 import {createRunsRoutes} from './runs.js';
 import {createCallsRoutes} from './calls.js';
 import {createStatsRoutes} from './stats.js';
+import {createServersRoutes} from './servers.js';
 import {createReplayRoutes, type ReplayContext} from './replay.js';
 
 export type {ReplayContext} from './replay.js';
@@ -21,11 +22,10 @@ export function createDashboardRoutes(
 	router.use('/runs', createRunsRoutes(db));
 	router.use('/calls', createCallsRoutes(db));
 	router.use('/stats', createStatsRoutes(db));
+	router.use('/servers', createServersRoutes(db));
 
-	// Replay routes require proxy context
-	if (getReplayContext) {
-		router.use('/', createReplayRoutes(db, getReplayContext));
-	}
+	// Replay routes - always mounted, returns error if no proxy context
+	router.use('/', createReplayRoutes(db, getReplayContext));
 
 	return router;
 }

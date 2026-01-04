@@ -55,12 +55,39 @@ Then lets you:
 # Install dependencies
 npm install
 
+# Build the React UI (required before running dashboard)
+npm run build:ui
+
 # Start dashboard and proxy separately
 npx tsx src/app/cli/index.ts dashboard &           # Start dashboard on :3000
 npx tsx src/app/cli/index.ts wrap -- npx tsx src/devtools/test-server.ts  # Wrap test server
 
 # Open the UI
 open http://localhost:3000
+```
+
+### Development
+
+For UI development with hot reload:
+
+```bash
+# In one terminal: Start Vite dev server (port 5173)
+npm run dev:ui
+
+# In another terminal: Start the dashboard API server
+npx tsx src/app/cli/index.ts dashboard
+
+# Open http://localhost:5173 (Vite dev server proxies API calls to :3000)
+```
+
+For production builds:
+
+```bash
+# Build everything (TypeScript + React UI)
+npm run build
+
+# Or build UI separately
+npm run build:ui
 ```
 
 ## Commands
@@ -273,51 +300,36 @@ Schemas are captured per run, enabling:
 ## Project Structure
 
 ```
-src/
-├── core/                          # Domain logic
-│   ├── redaction/redactor.ts     # Sensitive data redaction
-│   ├── replay/diff.ts            # JSON diff utility
-│   ├── runs/runManager.ts        # Run/session management
-│   ├── calls/schemaCapture.ts    # Tool schema capture
-│   └── types.ts                  # Shared domain types
-├── infrastructure/                # Adapters
-│   ├── database/
-│   │   ├── sqlite/db.ts          # SQLite implementation
-│   │   ├── sqlite/migrations.ts  # Database migrations
-│   │   ├── types.ts              # Database adapter interface
-│   │   └── index.ts              # Database exports
-│   ├── mcp/
-│   │   ├── proxy.ts              # MCP proxy server
-│   │   └── index.ts              # MCP exports
-│   └── notification/
-│       └── notifier.ts           # SSE notification client
-├── app/
-│   ├── cli/                      # CLI application
-│   │   ├── commands/             # Command handlers
-│   │   │   ├── dashboard.ts
-│   │   │   ├── wrap.ts
-│   │   │   ├── setup.ts
-│   │   │   ├── stats.ts
-│   │   │   └── diagnose.ts
-│   │   └── index.ts              # CLI entry point
-│   └── dashboard/                # Dashboard application
-│       ├── routes/               # API routes
-│       │   ├── runs.ts
-│       │   ├── calls.ts
-│       │   ├── stats.ts
-│       │   ├── replay.ts
-│       │   └── index.ts
-│       ├── realtime/
-│       │   └── sseManager.ts     # SSE manager
-│       ├── ui/
-│       │   └── index.ts          # Embedded web UI
-│       ├── server.ts             # Express server setup
-│       └── index.ts              # Dashboard entry point
-├── config/
-│   └── index.ts                  # Configuration management
-└── devtools/
-    ├── test-server.ts            # Test MCP server
-    └── test-client.ts            # Test client
+argus/
+├─ src/                         # Node runtime (CLI + proxy + API)
+│  ├─ app/
+│  │  ├─ dashboard/             # Express server + API routes + SSE
+│  │  │  ├─ routes/             # API endpoints
+│  │  │  ├─ realtime/           # SSE manager
+│  │  │  └─ server.ts           # Express server
+│  │  └─ cli/                   # CLI commands
+│  ├─ core/                     # Domain logic
+│  ├─ infrastructure/           # Adapters (database, MCP, notification)
+│  ├─ config/                   # Configuration management
+│  └─ devtools/                 # Test server/client
+│
+├─ web/                         # React app source (Vite)
+│  ├─ src/
+│  │  ├─ components/            # React components
+│  │  ├─ hooks/                 # Custom hooks
+│  │  ├─ context/               # React context
+│  │  ├─ api/                   # API client
+│  │  ├─ types/                 # TypeScript types
+│  │  ├─ styles/                # Tailwind CSS
+│  │  └─ main.tsx
+│  ├─ vite.config.ts
+│  └─ tailwind.config.js
+│
+├─ dist/
+│  ├─ app/                      # Compiled Node output
+│  └─ web/                      # Built web assets
+│
+└─ package.json
 ```
 
 ## Test Server Tools
