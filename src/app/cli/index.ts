@@ -37,6 +37,7 @@ program
 	.option('-p, --port <port>', 'Dashboard port', '3000')
 	.option('-d, --db <path>', 'Database file path')
 	.option('-c, --config <path>', 'Config file path')
+	.option('-o, --open', 'Open dashboard in browser automatically')
 	.action(handleDashboardCommand);
 
 // Wrap command
@@ -47,7 +48,12 @@ program
 	.argument('[args...]', 'Arguments for the MCP server command')
 	.option('-d, --db <path>', 'Database file path')
 	.option('-a, --api <url>', 'API server URL for SSE notifications')
-	.option('-P, --proxy-port <port>', 'Port for proxy API server (for replay)', '3001')
+	.option(
+		'-P, --proxy-port <port>',
+		'Port for proxy API server (for replay)',
+		'3001'
+	)
+	.option('-n, --name <name>', 'Friendly name for this server (used in UI)')
 	.option(
 		'-t, --idle-timeout <seconds>',
 		'Idle timeout before starting new run',

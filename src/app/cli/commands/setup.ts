@@ -7,16 +7,20 @@ import {existsSync} from 'fs';
 import {join} from 'path';
 import {
 	createDefaultConfig,
-	getClaudeDesktopConfigPath,
 	generateClaudeDesktopConfig,
-	loadConfig,
-	getDefaultDbPath
+	getClaudeDesktopConfigPath,
+	getDefaultDbPath,
+	loadConfig
 } from '../../../config/index.js';
 
 const banner = `
 ${chalk.cyan('╔═══════════════════════════════════════════════════════════╗')}
-${chalk.cyan('║')}  ${chalk.bold.magenta('👁️  Argus')} ${chalk.dim('v1.0.0')}                                         ${chalk.cyan('║')}
-${chalk.cyan('║')}  ${chalk.dim('See, replay, test every MCP tool call')}                     ${chalk.cyan('║')}
+${chalk.cyan('║')}  ${chalk.bold.magenta('👁️  Argus')} ${chalk.dim(
+	'v1.0.0'
+)}                                         ${chalk.cyan('║')}
+${chalk.cyan('║')}  ${chalk.dim(
+	'See, replay, test every MCP tool call'
+)}                     ${chalk.cyan('║')}
 ${chalk.cyan('╚═══════════════════════════════════════════════════════════╝')}
 `;
 
@@ -41,6 +45,8 @@ export async function handleSetupCommand(options: {
 		const inspectorPath = process.cwd();
 		const dbPath = config.database || getDefaultDbPath();
 
+		console.log(chalk.cyan(JSON.stringify(config)));
+
 		// If servers are configured, generate wrapped config
 		if (config.servers && Object.keys(config.servers).length > 0) {
 			const claudeConfig = generateClaudeDesktopConfig(
@@ -61,10 +67,16 @@ export async function handleSetupCommand(options: {
 						command: 'npx',
 						args: [
 							'tsx',
-							join(inspectorPath, 'src/cli.ts'),
+							join(inspectorPath, 'src/app/cli/index.ts'),
 							'wrap',
 							'--db',
 							dbPath,
+							'--name',
+							'Filesystem Server',
+							'--api',
+							'http://localhost:3000',
+							'--idle-timeout',
+							'300',
 							'--',
 							'npx',
 							'-y',
@@ -86,7 +98,9 @@ export async function handleSetupCommand(options: {
 			console.log(chalk.green('✓ Config file exists'));
 		} else {
 			console.log(
-				chalk.yellow('⚠️  Config file not found - Claude Desktop may not be installed')
+				chalk.yellow(
+					'⚠️  Config file not found - Claude Desktop may not be installed'
+				)
 			);
 		}
 
@@ -97,8 +111,13 @@ export async function handleSetupCommand(options: {
 
 	// Show help
 	console.log(chalk.bold('Available setup options:\n'));
-		console.log(chalk.cyan('  --init'), chalk.dim('   Create default argus.config.json'));
-	console.log(chalk.cyan('  --claude'), chalk.dim(' Generate Claude Desktop config snippet'));
+	console.log(
+		chalk.cyan('  --init'),
+		chalk.dim('   Create default argus.config.json')
+	);
+	console.log(
+		chalk.cyan('  --claude'),
+		chalk.dim(' Generate Claude Desktop config snippet')
+	);
 	console.log();
 }
-

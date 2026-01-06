@@ -16,7 +16,7 @@ import {
 } from '../../../core/redaction/redactor.js';
 import {
 	createSQLiteAdapter,
-	type SQLiteAdapter
+	type DatabaseAdapter
 } from '../../../infrastructure/database/index.js';
 import {MCPProxyServer} from '../../../infrastructure/mcp/index.js';
 import {
@@ -33,22 +33,10 @@ export async function handleWrapCommand(
 		proxyPort?: string;
 		idleTimeout?: string;
 		redact?: string | boolean;
+		name?: string;
 	}
 ): Promise<void> {
 	try {
-		// Check Node.js version
-		const nodeVersion = process.version;
-		const majorVersion = parseInt(nodeVersion.slice(1).split('.')[0]);
-		if (majorVersion < 18) {
-			console.error(
-				`[Argus] Warning: Node.js ${nodeVersion} detected. Node.js >=18 is recommended.`
-			);
-			console.error(
-				`[Argus] If you encounter module errors, rebuild native modules:`
-			);
-			console.error(`[Argus]   npm rebuild better-sqlite3`);
-		}
-
 		// Load config
 		const config = await loadConfig();
 
@@ -56,12 +44,16 @@ export async function handleWrapCommand(
 		const dbPath = options.db || config.database || getDefaultDbPath();
 		ensureDataDir();
 
+		// Determine server name: use provided name, or fallback to command
+		const serverName = options.name || command;
+
 		// Use stderr for logging (doesn't interfere with stdio JSON-RPC)
 		console.error(`[Argus] Wrapping: ${command} ${args.join(' ')}`);
+		console.error(`[Argus] Server name: ${serverName}`);
 		console.error(`[Argus] Database: ${dbPath}`);
 
-		// Create database adapter
-		const db = createSQLiteAdapter(dbPath);
+		// Create database adapter (async - sql.js)
+		const db = await createSQLiteAdapter(dbPath);
 
 		const redactKeys =
 			typeof options.redact === 'string'
@@ -78,7 +70,7 @@ export async function handleWrapCommand(
 			enabled: !!options.api
 		});
 
-		const proxy = new MCPProxyServer(db, command, {
+		const proxy = new MCPProxyServer(db, serverName, {
 			idleTimeout: parseInt(options.idleTimeout || '60') * 1000,
 			redactionConfig,
 			notifier
@@ -108,7 +100,7 @@ export async function handleWrapCommand(
  */
 function startProxyAPIServer(
 	proxy: MCPProxyServer,
-	db: SQLiteAdapter,
+	db: DatabaseAdapter,
 	port: number,
 	redactionConfig: RedactionConfig,
 	notifier: Notifier
@@ -160,7 +152,7 @@ function startProxyAPIServer(
 async function handleReplay(
 	callId: string,
 	proxy: MCPProxyServer,
-	db: SQLiteAdapter,
+	db: DatabaseAdapter,
 	redactionConfig: RedactionConfig,
 	notifier: Notifier,
 	res: ServerResponse

@@ -63,5 +63,8 @@ export interface DatabaseAdapter {
 
 	// Close connection
 	close(): void;
+
+	// Reload database from file (for multi-process scenarios with sql.js)
+	reload(): void;
 }
 

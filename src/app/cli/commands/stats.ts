@@ -30,7 +30,8 @@ export async function handleStatsCommand(options: {run?: string}): Promise<void>
 		return;
 	}
 
-	const db = createSQLiteAdapter(dbPath);
+	// Create database adapter (async - sql.js)
+	const db = await createSQLiteAdapter(dbPath);
 
 	// Get stats using the adapter
 	const runStats = db.getRunStats();

@@ -12,5 +12,5 @@ export type {
 	RunStats
 } from './types.js';
 
-export {SQLiteAdapter, createSQLiteAdapter} from './sqlite/db.js';
+export { SQLiteAdapter, createSQLiteAdapter } from './sqlite/db.js';
 

@@ -156,6 +156,7 @@ Applications built on top of infrastructure:
 React + Vite application for the dashboard UI.
 
 **Structure**:
+
 - `src/main.tsx` - Entry point
 - `src/App.tsx` - Root component
 - `src/components/` - React components (layout, calls, runs, stats, common)
@@ -168,6 +169,7 @@ React + Vite application for the dashboard UI.
 - `tailwind.config.js` - Tailwind configuration
 
 **Features**:
+
 - Component-based React architecture
 - Real-time updates via SSE
 - Multi-panel layout (sidebar, main, detail)
@@ -275,9 +277,14 @@ Claude Desktop → npx tsx src/app/cli/index.ts wrap <server>
 
 ---
 
-## Migration Status
+## REST API
 
-✅ **Complete**: All code migrated to new structure
-✅ **Clean**: No legacy files remain
-✅ **Organized**: Clear separation of concerns
-✅ **Documented**: Architecture and file structure documented
+| Endpoint                | Method | Description      |
+| ----------------------- | ------ | ---------------- |
+| `/api/runs`             | GET    | List all runs    |
+| `/api/runs/:id`         | GET    | Get run details  |
+| `/api/calls`            | GET    | List tool calls  |
+| `/api/calls/:id`        | GET    | Get call details |
+| `/api/calls/:id/replay` | POST   | Replay a call    |
+| `/api/stats`            | GET    | Get statistics   |
+| `/api/events`           | GET    | SSE stream       |

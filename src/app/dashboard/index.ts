@@ -3,9 +3,13 @@
  * Standalone dashboard that can run independently
  */
 
+import {
+	ensureDataDir,
+	getDefaultDbPath,
+	loadConfig
+} from '../../config/index.js';
 import {createSQLiteAdapter} from '../../infrastructure/database/index.js';
 import {startDashboardServer} from './server.js';
-import {loadConfig, getDefaultDbPath, ensureDataDir} from '../../config/index.js';
 
 export interface DashboardOptions {
 	port?: number;
@@ -13,7 +17,9 @@ export interface DashboardOptions {
 	configPath?: string;
 }
 
-export async function startDashboard(options: DashboardOptions = {}): Promise<void> {
+export async function startDashboard(
+	options: DashboardOptions = {}
+): Promise<void> {
 	// Load config file if present
 	const config = await loadConfig(options.configPath);
 
@@ -28,8 +34,8 @@ export async function startDashboard(options: DashboardOptions = {}): Promise<vo
 	console.error(`[Dashboard] Database: ${dbPath}`);
 	console.error(`[Dashboard] Port: ${port}`);
 
-	// Create database adapter
-	const db = createSQLiteAdapter(dbPath);
+	// Create database adapter (async - sql.js)
+	const db = await createSQLiteAdapter(dbPath);
 
 	// Start dashboard server (no replay context since we're standalone)
 	const {sse} = startDashboardServer(db, {
@@ -55,4 +61,3 @@ export async function startDashboard(options: DashboardOptions = {}): Promise<vo
 		process.exit(0);
 	});
 }
-

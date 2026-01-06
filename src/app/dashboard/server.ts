@@ -4,11 +4,11 @@
  */
 
 import express, {Express, Request, Response} from 'express';
-import {join, dirname} from 'path';
+import {dirname, join} from 'path';
 import {fileURLToPath} from 'url';
 import type {DatabaseAdapter} from '../../infrastructure/database/types.js';
-import {createDashboardRoutes, type ReplayContext} from './routes/index.js';
 import {createSSEManager, type SSEManager} from './realtime/sseManager.js';
+import {createDashboardRoutes, type ReplayContext} from './routes/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,7 +24,8 @@ export function createDashboardServer(
 	options: DashboardServerOptions = {}
 ): {app: Express; sse: SSEManager} {
 	const app = express();
-	const sse = options.enableSSE !== false ? createSSEManager() : createSSEManager();
+	const sse =
+		options.enableSSE !== false ? createSSEManager() : createSSEManager();
 
 	app.use(express.json());
 
@@ -48,6 +49,9 @@ export function createDashboardServer(
 	app.post('/api/notify', (req: Request, res: Response) => {
 		const {type, callId, toolName, runId, action} = req.body;
 
+		// Reload database to get latest data from file (sql.js is in-memory)
+		db.reload();
+
 		if (type === 'call') {
 			sse.notifyNewCall(callId, toolName, runId);
 		} else if (type === 'run') {
@@ -66,7 +70,8 @@ export function createDashboardServer(
 	app.use('/api', createDashboardRoutes(db, options.getReplayContext));
 
 	// Serve static files from dist/web (built React app)
-	const webDistPath = join(__dirname, '../../../../dist/web');
+	// __dirname = src/app/dashboard, so ../../../dist/web = project_root/dist/web
+	const webDistPath = join(__dirname, '../../../dist/web');
 	app.use(express.static(webDistPath));
 
 	// SPA fallback: serve index.html for all non-API routes
@@ -95,4 +100,3 @@ export function startDashboardServer(
 
 	return {app, sse};
 }
-

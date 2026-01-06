@@ -11,6 +11,7 @@ import {dirname, join} from 'path';
 // ============================================================================
 
 export interface MCPServerConfig {
+	name?: string; // Friendly display name for the server
 	command: string;
 	args?: string[];
 	env?: Record<string, string>;
@@ -183,9 +184,15 @@ export function createDefaultConfig(path?: string): string {
 		servers: {
 			// Example server configuration
 			// "github": {
+			//   "name": "GitHub Server",
 			//   "command": "npx",
 			//   "args": ["-y", "@modelcontextprotocol/server-github"],
 			//   "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+			// },
+			// "filesystem": {
+			//   "name": "Filesystem Server",
+			//   "command": "npx",
+			//   "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
 			// }
 		}
 	};
@@ -227,16 +234,20 @@ export function generateClaudeDesktopConfig(
 		mcpServers: {}
 	};
 
-	for (const [name, server] of Object.entries(servers)) {
+	for (const [key, server] of Object.entries(servers)) {
 		const args = ['tsx', join(inspectorPath, 'src/app/cli/index.ts'), 'wrap'];
 
 		if (dbPath) {
 			args.push('--db', dbPath);
 		}
 
+		// Add --name flag with server name (use config name, fallback to key)
+		const serverName = server.name || key;
+		args.push('--name', serverName);
+
 		args.push('--', server.command, ...(server.args || []));
 
-		config.mcpServers[name] = {
+		config.mcpServers[key] = {
 			command: 'npx',
 			args,
 			env: server.env

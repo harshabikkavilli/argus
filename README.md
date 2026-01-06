@@ -18,185 +18,136 @@ Then lets you:
 - 🔄 Replay tool calls without involving the LLM
 - 📋 Compare original vs replayed results (diff view)
 - 🔍 Debug issues visually with timeline UI
-- 📁 Filter and analyze by run/session
 - 📡 Real-time updates via SSE
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Argus Dashboard                               │
-│                    http://localhost:3000                         │
-│              (Web App with real-time SSE updates)                │
+│                    Argus Dashboard                              │
+│                  http://localhost:3000                          │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ reads from
                            ▼
                    ┌───────────────┐
                    │    SQLite     │
-                   │   Database    │
                    └───────────────┘
                            ▲
          ┌─────────────────┼─────────────────┐
          │                 │                 │
     ┌────┴────┐       ┌────┴────┐       ┌────┴────┐
-    │ wrap    │       │ wrap    │       │ wrap    │
     │ GitHub  │       │ Figma   │       │ Custom  │
-    └────┬────┘       └────┬────┘       └────┬────┘
-         │                 │                 │
-    ┌────▼────┐       ┌────▼────┐       ┌────▼────┐
-    │ GitHub  │       │ Figma   │       │ Custom  │
-    │   MCP   │       │   MCP   │       │   MCP   │
+    │ (wrap)  │       │ (wrap)  │       │ (wrap)  │
     └─────────┘       └─────────┘       └─────────┘
+```
+
+## Installation
+
+```bash
+npm install -g argus
+# or use locally
+npm install
 ```
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-npm install
+# 1. Start the dashboard
+argus dashboard
 
-# Build the React UI (required before running dashboard)
-npm run build:ui
+# 2. In another terminal, wrap any MCP server
+argus wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp
 
-# Start dashboard and proxy separately
-npx tsx src/app/cli/index.ts dashboard &           # Start dashboard on :3000
-npx tsx src/app/cli/index.ts wrap -- npx tsx src/devtools/test-server.ts  # Wrap test server
-
-# Open the UI
+# 3. Open the UI
 open http://localhost:3000
 ```
 
-### Development
+## CLI Commands
 
-For UI development with hot reload:
+### `argus dashboard`
 
-```bash
-# In one terminal: Start Vite dev server (port 5173)
-npm run dev:ui
-
-# In another terminal: Start the dashboard API server
-npx tsx src/app/cli/index.ts dashboard
-
-# Open http://localhost:5173 (Vite dev server proxies API calls to :3000)
-```
-
-For production builds:
+Start the monitoring dashboard:
 
 ```bash
-# Build everything (TypeScript + React UI)
-npm run build
-
-# Or build UI separately
-npm run build:ui
-```
-
-## Commands
-
-### `dashboard` - Start the Standalone Dashboard
-
-The dashboard runs independently and shows recordings from all proxies:
-
-```bash
-npx tsx src/app/cli/index.ts dashboard
-
-# With options
-npx tsx src/app/cli/index.ts dashboard --port 4000 --db ./my-data.db
+argus dashboard                    # Default port 3000
+argus dashboard --port 4000        # Custom port
+argus dashboard --db ./custom.db   # Custom database
 ```
 
 **Options:**
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-p, --port` | Dashboard port | 3000 |
+| `-d, --db` | Database path | ~/.argus/argus.db |
 
-- `-p, --port <port>` - Dashboard port (default: 3000)
-- `-d, --db <path>` - Database file path (default: ~/.argus/argus.db)
-- `-c, --config <path>` - Config file path
+### `argus wrap`
 
-### `wrap` - Wrap an MCP Server
-
-Lightweight proxy that records tool calls to the database:
+Wrap an MCP server to record all tool calls:
 
 ```bash
-# Wrap any MCP server
-npx tsx src/app/cli/index.ts wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp
+# Basic usage
+argus wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp
 
-# With API notifications for real-time updates
-npx tsx src/app/cli/index.ts wrap --api http://localhost:3000 -- npx tsx src/devtools/test-server.ts
+# With real-time dashboard updates
+argus wrap --api http://localhost:3000 -- npx -y @modelcontextprotocol/server-github
 
-# Custom database location
-npx tsx src/app/cli/index.ts wrap --db ./my-data.db -- npx -y @modelcontextprotocol/server-github
+# Custom server name (shows in dashboard)
+argus wrap --name "GitHub Server" -- npx -y @modelcontextprotocol/server-github
 ```
 
 **Options:**
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-d, --db` | Database path | ~/.argus/argus.db |
+| `-a, --api` | Dashboard URL for real-time updates | - |
+| `-n, --name` | Server display name | command |
+| `-t, --idle-timeout` | Seconds before new run | 60 |
+| `--redact` | Additional keys to redact | - |
+| `--no-redact` | Disable redaction | - |
 
-- `-d, --db <path>` - Database file path
-- `-a, --api <url>` - Dashboard API URL for real-time notifications
-- `-t, --idle-timeout <seconds>` - Idle timeout before new run (default: 60)
-- `--redact <keys>` - Additional keys to redact
-- `--no-redact` - Disable redaction
+### `argus setup`
 
-### `setup` - Generate Configurations
-
-```bash
-# Create default config file
-npx tsx src/app/cli/index.ts setup --init
-
-# Generate Claude Desktop configuration
-npx tsx src/app/cli/index.ts setup --claude
-```
-
-### `stats` - Quick Stats
+Generate configuration files:
 
 ```bash
-npx tsx src/app/cli/index.ts stats
-npx tsx src/app/cli/index.ts stats --run <run-id>
+argus setup --init     # Create argus.config.json
+argus setup --claude   # Generate Claude Desktop config
 ```
 
-### `diagnose` - Diagnostic Information
+### `argus stats`
+
+View recording statistics:
 
 ```bash
-npx tsx src/app/cli/index.ts diagnose
+argus stats              # All stats
+argus stats --run <id>   # Stats for specific run
 ```
+
+### `argus diagnose`
+
+Print diagnostic information for troubleshooting.
 
 ## Using with Claude Desktop
 
-Run the setup command to generate the configuration:
+1. Generate the config:
 
-```bash
-npx tsx src/app/cli/index.ts setup --claude
-```
+   ```bash
+   argus setup --claude
+   ```
 
-This generates a `claude_desktop_config.json` snippet like:
+2. Copy the output to your `claude_desktop_config.json`
 
-```json
-{
-	"mcpServers": {
-		"your-server": {
-			"command": "npx",
-			"args": [
-				"tsx",
-				"/path/to/argus/src/app/cli/index.ts",
-				"wrap",
-				"--db",
-				"/Users/you/.argus/argus.db",
-				"--",
-				"npx",
-				"-y",
-				"@modelcontextprotocol/server-filesystem",
-				"/tmp"
-			]
-		}
-	}
-}
-```
+3. Start the dashboard separately:
 
-Then run the dashboard separately:
+   ```bash
+   argus dashboard
+   ```
 
-```bash
-npx tsx src/app/cli/index.ts dashboard
-# Open http://localhost:3000
-```
+4. Restart Claude Desktop
 
 ## Configuration File
 
-Create `argus.config.json` for persistent settings:
+Create `argus.config.json`:
 
 ```json
 {
@@ -209,6 +160,7 @@ Create `argus.config.json` for persistent settings:
 	},
 	"servers": {
 		"github": {
+			"name": "GitHub Server",
 			"command": "npx",
 			"args": ["-y", "@modelcontextprotocol/server-github"],
 			"env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"}
@@ -217,31 +169,20 @@ Create `argus.config.json` for persistent settings:
 }
 ```
 
-Initialize with:
-
-```bash
-npx tsx src/app/cli/index.ts setup --init
-```
-
 ## Features
 
-### Real-time Updates (SSE)
+### Real-time Updates
 
-The dashboard uses Server-Sent Events for instant updates:
-
-- New tool calls appear immediately
-- Run status updates in real-time
-- Fallback to polling if SSE unavailable
+Dashboard updates instantly via Server-Sent Events when using `--api` flag.
 
 ### Sessions/Runs
 
-Tool calls are grouped into **runs**:
+Tool calls are grouped into runs:
 
 - New run on proxy connect
 - New run after idle timeout (default: 60s)
-- Manual start/stop via UI or API
 
-### Redaction
+### Automatic Redaction
 
 Sensitive data is automatically redacted:
 
@@ -250,170 +191,49 @@ Sensitive data is automatically redacted:
 
 ### Replay with Diff
 
-Replay any tool call and see:
-
-- Original vs replay latency
-- JSON diff of results
-- Linked call history
-
-### Tool Schema Capture
-
-Schemas are captured per run, enabling:
-
-- Parameter hints in UI
-- Required field validation
-
-## REST API
-
-### Runs
-
-| Endpoint               | Method | Description                |
-| ---------------------- | ------ | -------------------------- |
-| `/api/runs`            | GET    | List all runs              |
-| `/api/runs/:id`        | GET    | Get run details with calls |
-| `/api/runs/:id/schema` | GET    | Get captured tool schemas  |
-| `/api/runs/start`      | POST   | Manual start new run       |
-
-### Calls
-
-| Endpoint                | Method | Description                  |
-| ----------------------- | ------ | ---------------------------- |
-| `/api/calls`            | GET    | List all recorded calls      |
-| `/api/calls/:id`        | GET    | Get call details with schema |
-| `/api/calls/:id/replay` | POST   | Replay a call (returns diff) |
-| `/api/calls`            | DELETE | Clear all recordings         |
-
-### Real-time
-
-| Endpoint          | Method | Description              |
-| ----------------- | ------ | ------------------------ |
-| `/api/events`     | GET    | SSE stream for real-time |
-| `/api/notify`     | POST   | Notify of new events     |
-| `/api/sse/status` | GET    | SSE connection count     |
-
-### Stats
-
-| Endpoint     | Method | Description    |
-| ------------ | ------ | -------------- |
-| `/api/stats` | GET    | Get statistics |
-
-## Project Structure
-
-```
-argus/
-├─ src/                         # Node runtime (CLI + proxy + API)
-│  ├─ app/
-│  │  ├─ dashboard/             # Express server + API routes + SSE
-│  │  │  ├─ routes/             # API endpoints
-│  │  │  ├─ realtime/           # SSE manager
-│  │  │  └─ server.ts           # Express server
-│  │  └─ cli/                   # CLI commands
-│  ├─ core/                     # Domain logic
-│  ├─ infrastructure/           # Adapters (database, MCP, notification)
-│  ├─ config/                   # Configuration management
-│  └─ devtools/                 # Test server/client
-│
-├─ web/                         # React app source (Vite)
-│  ├─ src/
-│  │  ├─ components/            # React components
-│  │  ├─ hooks/                 # Custom hooks
-│  │  ├─ context/               # React context
-│  │  ├─ api/                   # API client
-│  │  ├─ types/                 # TypeScript types
-│  │  ├─ styles/                # Tailwind CSS
-│  │  └─ main.tsx
-│  ├─ vite.config.ts
-│  └─ tailwind.config.js
-│
-├─ dist/
-│  ├─ app/                      # Compiled Node output
-│  └─ web/                      # Built web assets
-│
-└─ package.json
-```
-
-## Test Server Tools
-
-| Tool             | Description                                  |
-| ---------------- | -------------------------------------------- |
-| `calculate`      | Basic math (add, subtract, multiply, divide) |
-| `get_weather`    | Mock weather data for a city                 |
-| `slow_operation` | Artificial delay for latency testing         |
-| `random_failure` | 50% chance of failure                        |
-| `always_fail`    | Always throws an error                       |
-| `echo`           | Echoes back parameters                       |
+Replay any tool call and compare original vs replayed results.
 
 ## Troubleshooting
 
 ### Claude Desktop Shows "Server disconnected"
 
-If Claude Desktop shows "Server disconnected" after configuring the wrap command:
-
-1. **Node.js Version Mismatch (Most Common):**
-   If you see errors about `NODE_MODULE_VERSION` mismatch:
+1. Test the wrap command manually:
 
    ```bash
-   # Find which Node version Claude Desktop is using (check logs)
-   # Then rebuild better-sqlite3 for that version:
-   /path/to/node/v16.13.1/bin/npm rebuild better-sqlite3
-
-   # Or rebuild for all Node versions you have:
-   nvm use 16 && npm rebuild better-sqlite3
-   nvm use 18 && npm rebuild better-sqlite3
-   nvm use 20 && npm rebuild better-sqlite3
+   argus wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp
    ```
 
-   **Note:** Claude Desktop may use a different Node version than your terminal. Check the logs to see which version it's using.
-
-2. **Verify the command works manually:**
-
-   ```bash
-   npx tsx src/app/cli/index.ts wrap --db ~/.argus/argus.db -- npx -y @modelcontextprotocol/server-filesystem /tmp
-   ```
-
-   If this fails, check the error message.
-
-3. **Check Claude Desktop logs:**
+2. Check Claude Desktop logs:
 
    - macOS: `~/Library/Logs/Claude/`
    - Windows: `%APPDATA%\Claude\logs\`
-   - Linux: `~/.config/claude/logs/`
 
-4. **Common issues:**
-
-   - **`tsx` not found**: Make sure you use `npx tsx` in the command (not just `tsx`)
-   - **Upstream server fails**: Test the upstream command directly:
-     ```bash
-     npx -y @modelcontextprotocol/server-filesystem /tmp
-     ```
-   - **Database path issues**: Ensure the database directory exists:
-     ```bash
-     mkdir -p ~/.argus
-     ```
-
-5. **Test the wrap command:**
-
+3. Verify your MCP server works:
    ```bash
-   npx tsx src/app/cli/index.ts wrap -- npx tsx src/devtools/test-server.ts
+   npx -y @modelcontextprotocol/server-filesystem /tmp
    ```
-
-6. **Verify your Claude Desktop config:**
-   - Command should be: `npx`
-   - First arg should be: `tsx`
-   - Second arg should be: full path to `src/app/cli/index.ts`
-   - Then: `wrap`, `--db`, `<path>`, `--`, and your MCP server command
 
 ### Dashboard Not Showing Updates
 
-- Make sure the dashboard is running: `npx tsx src/app/cli/index.ts dashboard`
-- Check that proxies are using `--api http://localhost:3000` to enable real-time updates
-- Verify both dashboard and proxy are using the same database path
+- Ensure dashboard is running: `argus dashboard`
+- Use `--api http://localhost:3000` with wrap command
+- Both must use the same database path
 
-### Database Locked Errors
+## Development
 
-- Only one process can write to SQLite at a time
-- Make sure you're not running multiple proxies with the same database
-- Use separate database files for different servers if needed
+```bash
+# Install dependencies
+npm install
+
+# Build everything
+npm run build
+
+# Run dashboard (dev)
+npm run start dashboard
+
+# Run with hot reload (UI only)
+npm run dev:ui
+```
 
 ## License
 

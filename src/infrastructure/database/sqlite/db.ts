@@ -1,35 +1,78 @@
 /**
- * SQLite implementation of the DatabaseAdapter
+ * SQLite implementation of the DatabaseAdapter using sql.js (pure JavaScript)
+ *
+ * sql.js is WebAssembly-based, works everywhere without native compilation.
+ * No more Node version mismatch issues!
  */
 
-import Database from 'better-sqlite3';
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'fs';
+import {dirname} from 'path';
+import initSqlJs, {type Database as SqlJsDatabase} from 'sql.js';
 import type {
 	DatabaseAdapter,
-	ToolCallRecord,
 	RunRecord,
-	ToolSchemaRecord,
+	RunStats,
 	StatsOverview,
-	ToolStats,
-	RunStats
+	ToolCallRecord,
+	ToolSchemaRecord,
+	ToolStats
 } from '../types.js';
 
 import {migrateDatabase} from './migrations.js';
 
 // ============================================================================
-// SQLite Adapter
+// SQLite Adapter (sql.js - pure JavaScript)
 // ============================================================================
 
 export class SQLiteAdapter implements DatabaseAdapter {
-	private db: Database.Database;
-	private insertCallStmt: Database.Statement;
-	private insertRunStmt: Database.Statement;
-	private insertSchemaStmt: Database.Statement;
+	private db: SqlJsDatabase;
+	private dbPath: string;
+	private SQL: Awaited<ReturnType<typeof initSqlJs>> | null = null;
 
-	constructor(dbPath: string = 'argus.db') {
-		this.db = new Database(dbPath);
+	private constructor(
+		db: SqlJsDatabase,
+		dbPath: string,
+		SQL: Awaited<ReturnType<typeof initSqlJs>>
+	) {
+		this.db = db;
+		this.dbPath = dbPath;
+		this.SQL = SQL;
+	}
+
+	/**
+	 * Create a new SQLiteAdapter instance (async factory)
+	 */
+	static async create(dbPath: string = 'argus.db'): Promise<SQLiteAdapter> {
+		// Initialize sql.js
+		const SQL = await initSqlJs();
+
+		let db: SqlJsDatabase;
+
+		// Load existing database or create new one
+		if (existsSync(dbPath)) {
+			try {
+				const fileBuffer = readFileSync(dbPath);
+				db = new SQL.Database(fileBuffer);
+			} catch (error) {
+				console.error(
+					`[Database] Failed to load ${dbPath}, creating new:`,
+					error
+				);
+				db = new SQL.Database();
+			}
+		} else {
+			// Ensure directory exists
+			const dir = dirname(dbPath);
+			if (dir && !existsSync(dir)) {
+				mkdirSync(dir, {recursive: true});
+			}
+			db = new SQL.Database();
+		}
+
+		const adapter = new SQLiteAdapter(db, dbPath, SQL);
 
 		// Create base tables
-		this.db.exec(`
+		adapter.db.run(`
 			CREATE TABLE IF NOT EXISTS tool_calls (
 				id TEXT PRIMARY KEY,
 				timestamp INTEGER,
@@ -43,29 +86,90 @@ export class SQLiteAdapter implements DatabaseAdapter {
 		`);
 
 		// Run migrations
-		migrateDatabase(this.db);
+		migrateDatabase(adapter.db);
 
-		// Prepare statements for performance
-		this.insertCallStmt = this.db.prepare(`
-			INSERT INTO tool_calls (id, timestamp, tool_name, params, result, error, latency_ms, mcp_server, run_id, replayed_from)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`);
+		// Save initial state
+		adapter.saveToFile();
 
-		this.insertRunStmt = this.db.prepare(`
-			INSERT INTO runs (id, started_at, mcp_server, status)
-			VALUES (?, ?, ?, 'active')
-		`);
+		return adapter;
+	}
 
-		this.insertSchemaStmt = this.db.prepare(`
-			INSERT INTO tool_schemas (id, run_id, mcp_server, captured_at, tools_json)
-			VALUES (?, ?, ?, ?, ?)
-		`);
+	/**
+	 * Reload database from file (for multi-process scenarios)
+	 * Call this when you know another process has written to the file
+	 */
+	reload(): void {
+		if (!this.SQL) {
+			console.error('[Database] Cannot reload: SQL not initialized');
+			return;
+		}
+
+		try {
+			if (existsSync(this.dbPath)) {
+				const fileBuffer = readFileSync(this.dbPath);
+				// Close old database
+				this.db.close();
+				// Create new database from file
+				this.db = new this.SQL.Database(fileBuffer);
+			}
+		} catch (error) {
+			console.error('[Database] Failed to reload:', error);
+		}
+	}
+
+	/**
+	 * Save database to file (immediate - required for multi-process scenarios)
+	 */
+	private saveToFile(): void {
+		try {
+			const data = this.db.export();
+			const buffer = Buffer.from(data);
+			writeFileSync(this.dbPath, buffer);
+		} catch (error) {
+			console.error('[Database] Failed to save:', error);
+		}
+	}
+
+	// =========== Helper Methods ===========
+
+	private runQuery(sql: string, params: (string | number | null)[] = []): void {
+		this.db.run(sql, params);
+		this.saveToFile();
+	}
+
+	private getOne<T>(
+		sql: string,
+		params: (string | number | null)[] = []
+	): T | undefined {
+		const stmt = this.db.prepare(sql);
+		stmt.bind(params);
+		if (stmt.step()) {
+			const result = stmt.getAsObject() as T;
+			stmt.free();
+			return result;
+		}
+		stmt.free();
+		return undefined;
+	}
+
+	private getAll<T>(sql: string, params: (string | number | null)[] = []): T[] {
+		const results: T[] = [];
+		const stmt = this.db.prepare(sql);
+		stmt.bind(params);
+		while (stmt.step()) {
+			results.push(stmt.getAsObject() as T);
+		}
+		stmt.free();
+		return results;
 	}
 
 	// =========== Runs ===========
 
 	createRun(run: Pick<RunRecord, 'id' | 'started_at' | 'mcp_server'>): void {
-		this.insertRunStmt.run(run.id, run.started_at, run.mcp_server);
+		this.runQuery(
+			`INSERT INTO runs (id, started_at, mcp_server, status) VALUES (?, ?, ?, 'active')`,
+			[run.id, run.started_at, run.mcp_server]
+		);
 	}
 
 	updateRun(
@@ -86,30 +190,29 @@ export class SQLiteAdapter implements DatabaseAdapter {
 
 		if (setClauses.length > 0) {
 			params.push(id);
-			this.db
-				.prepare(`UPDATE runs SET ${setClauses.join(', ')} WHERE id = ?`)
-				.run(...params);
+			this.runQuery(
+				`UPDATE runs SET ${setClauses.join(', ')} WHERE id = ?`,
+				params
+			);
 		}
 	}
 
 	incrementRunToolCount(id: string, hasError: boolean): void {
 		if (hasError) {
-			this.db
-				.prepare(
-					`UPDATE runs SET tool_count = tool_count + 1, error_count = error_count + 1 WHERE id = ?`
-				)
-				.run(id);
+			this.runQuery(
+				`UPDATE runs SET tool_count = tool_count + 1, error_count = error_count + 1 WHERE id = ?`,
+				[id]
+			);
 		} else {
-			this.db
-				.prepare(`UPDATE runs SET tool_count = tool_count + 1 WHERE id = ?`)
-				.run(id);
+			this.runQuery(
+				`UPDATE runs SET tool_count = tool_count + 1 WHERE id = ?`,
+				[id]
+			);
 		}
 	}
 
 	getRun(id: string): RunRecord | undefined {
-		return this.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as
-			| RunRecord
-			| undefined;
+		return this.getOne<RunRecord>('SELECT * FROM runs WHERE id = ?', [id]);
 	}
 
 	listRuns(options?: {status?: string; limit?: number}): RunRecord[] {
@@ -127,30 +230,35 @@ export class SQLiteAdapter implements DatabaseAdapter {
 		query += ' ORDER BY started_at DESC LIMIT ?';
 		params.push(limit);
 
-		return this.db.prepare(query).all(...params) as RunRecord[];
+		return this.getAll<RunRecord>(query, params);
 	}
 
 	// =========== Tool Calls ===========
 
 	insertToolCall(call: ToolCallRecord): void {
-		this.insertCallStmt.run(
-			call.id,
-			call.timestamp,
-			call.tool_name,
-			call.params,
-			call.result,
-			call.error,
-			call.latency_ms,
-			call.mcp_server,
-			call.run_id,
-			call.replayed_from
+		this.runQuery(
+			`INSERT INTO tool_calls (id, timestamp, tool_name, params, result, error, latency_ms, mcp_server, run_id, replayed_from)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			[
+				call.id,
+				call.timestamp,
+				call.tool_name,
+				call.params,
+				call.result,
+				call.error,
+				call.latency_ms,
+				call.mcp_server,
+				call.run_id,
+				call.replayed_from
+			]
 		);
 	}
 
 	getToolCall(id: string): ToolCallRecord | undefined {
-		return this.db
-			.prepare('SELECT * FROM tool_calls WHERE id = ?')
-			.get(id) as ToolCallRecord | undefined;
+		return this.getOne<ToolCallRecord>(
+			'SELECT * FROM tool_calls WHERE id = ?',
+			[id]
+		);
 	}
 
 	listToolCalls(options?: {
@@ -184,33 +292,37 @@ export class SQLiteAdapter implements DatabaseAdapter {
 		query += ' ORDER BY timestamp DESC LIMIT ?';
 		params.push(limit);
 
-		return this.db.prepare(query).all(...params) as ToolCallRecord[];
+		return this.getAll<ToolCallRecord>(query, params);
 	}
 
 	getToolCallsForRun(runId: string): ToolCallRecord[] {
-		return this.db
-			.prepare(
-				'SELECT * FROM tool_calls WHERE run_id = ? ORDER BY timestamp ASC'
-			)
-			.all(runId) as ToolCallRecord[];
+		return this.getAll<ToolCallRecord>(
+			'SELECT * FROM tool_calls WHERE run_id = ? ORDER BY timestamp ASC',
+			[runId]
+		);
 	}
 
 	// =========== Tool Schemas ===========
 
 	insertToolSchema(schema: ToolSchemaRecord): void {
-		this.insertSchemaStmt.run(
-			schema.id,
-			schema.run_id,
-			schema.mcp_server,
-			schema.captured_at,
-			schema.tools_json
+		this.runQuery(
+			`INSERT INTO tool_schemas (id, run_id, mcp_server, captured_at, tools_json)
+			 VALUES (?, ?, ?, ?, ?)`,
+			[
+				schema.id,
+				schema.run_id,
+				schema.mcp_server,
+				schema.captured_at,
+				schema.tools_json
+			]
 		);
 	}
 
 	getSchemaForRun(runId: string): ToolSchemaRecord | undefined {
-		return this.db
-			.prepare('SELECT * FROM tool_schemas WHERE run_id = ?')
-			.get(runId) as ToolSchemaRecord | undefined;
+		return this.getOne<ToolSchemaRecord>(
+			'SELECT * FROM tool_schemas WHERE run_id = ?',
+			[runId]
+		);
 	}
 
 	// =========== Stats ===========
@@ -223,17 +335,26 @@ export class SQLiteAdapter implements DatabaseAdapter {
 			params.push(runId);
 		}
 
-		return this.db
-			.prepare(
-				`SELECT 
-					COUNT(*) as total_calls,
-					COUNT(CASE WHEN error IS NOT NULL THEN 1 END) as failed_calls,
-					AVG(latency_ms) as avg_latency,
-					MAX(latency_ms) as max_latency,
-					MIN(latency_ms) as min_latency
-				FROM tool_calls${whereClause}`
-			)
-			.get(...params) as StatsOverview;
+		const result = this.getOne<StatsOverview>(
+			`SELECT 
+				COUNT(*) as total_calls,
+				COUNT(CASE WHEN error IS NOT NULL THEN 1 END) as failed_calls,
+				AVG(latency_ms) as avg_latency,
+				MAX(latency_ms) as max_latency,
+				MIN(latency_ms) as min_latency
+			FROM tool_calls${whereClause}`,
+			params
+		);
+
+		return (
+			result || {
+				total_calls: 0,
+				failed_calls: 0,
+				avg_latency: 0,
+				max_latency: 0,
+				min_latency: 0
+			}
+		);
 	}
 
 	getToolBreakdown(runId?: string): ToolStats[] {
@@ -244,69 +365,65 @@ export class SQLiteAdapter implements DatabaseAdapter {
 			params.push(runId);
 		}
 
-		return this.db
-			.prepare(
-				`SELECT 
-					tool_name,
-					COUNT(*) as call_count,
-					AVG(latency_ms) as avg_latency,
-					COUNT(CASE WHEN error IS NOT NULL THEN 1 END) as error_count
-				FROM tool_calls${whereClause}
-				GROUP BY tool_name
-				ORDER BY call_count DESC`
-			)
-			.all(...params) as ToolStats[];
+		return this.getAll<ToolStats>(
+			`SELECT 
+				tool_name,
+				COUNT(*) as call_count,
+				AVG(latency_ms) as avg_latency,
+				COUNT(CASE WHEN error IS NOT NULL THEN 1 END) as error_count
+			FROM tool_calls${whereClause}
+			GROUP BY tool_name
+			ORDER BY call_count DESC`,
+			params
+		);
 	}
 
 	getRunStats(): RunStats {
-		return this.db
-			.prepare(
-				`SELECT 
-					COUNT(*) as total_runs,
-					COUNT(CASE WHEN status = 'active' THEN 1 END) as active_runs
-				FROM runs`
-			)
-			.get() as RunStats;
+		const result = this.getOne<RunStats>(
+			`SELECT 
+				COUNT(*) as total_runs,
+				COUNT(CASE WHEN status = 'active' THEN 1 END) as active_runs
+			FROM runs`
+		);
+
+		return result || {total_runs: 0, active_runs: 0};
 	}
 
 	// =========== Servers ===========
 
-	listServers(): { name: string; call_count: number; last_seen: number }[] {
-		return this.db
-			.prepare(
-				`SELECT 
-					mcp_server as name,
-					COUNT(*) as call_count,
-					MAX(timestamp) as last_seen
-				FROM tool_calls
-				WHERE mcp_server IS NOT NULL AND mcp_server != ''
-				GROUP BY mcp_server
-				ORDER BY call_count DESC`
-			)
-			.all() as { name: string; call_count: number; last_seen: number }[];
+	listServers(): {name: string; call_count: number; last_seen: number}[] {
+		return this.getAll<{name: string; call_count: number; last_seen: number}>(
+			`SELECT 
+				mcp_server as name,
+				COUNT(*) as call_count,
+				MAX(timestamp) as last_seen
+			FROM tool_calls
+			WHERE mcp_server IS NOT NULL AND mcp_server != ''
+			GROUP BY mcp_server
+			ORDER BY call_count DESC`
+		);
 	}
 
 	// =========== Cleanup ===========
 
 	clearAll(): void {
-		this.db.prepare('DELETE FROM tool_calls').run();
-		this.db.prepare('DELETE FROM tool_schemas').run();
-		this.db.prepare('DELETE FROM runs').run();
+		this.runQuery('DELETE FROM tool_calls');
+		this.runQuery('DELETE FROM tool_schemas');
+		this.runQuery('DELETE FROM runs');
 	}
 
 	close(): void {
+		this.saveToFile();
 		this.db.close();
 	}
-
-	// =========== Raw Access (for backwards compatibility) ===========
-
-	getRawDb(): Database.Database {
-		return this.db;
-	}
 }
 
-// Factory function
-export function createSQLiteAdapter(dbPath?: string): SQLiteAdapter {
-	return new SQLiteAdapter(dbPath);
-}
+// ============================================================================
+// Factory function (async)
+// ============================================================================
 
+export async function createSQLiteAdapter(
+	dbPath?: string
+): Promise<SQLiteAdapter> {
+	return SQLiteAdapter.create(dbPath);
+}
