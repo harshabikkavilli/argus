@@ -5,7 +5,7 @@
 	"type": "module",
 	"main": "dist/app/cli/index.js",
 	"bin": {
-		"argus": "./dist/app/cli/index.js"
+		"argus": "dist/app/cli/index.js"
 	},
 	"files": [
 		"dist/**/*",
@@ -39,7 +39,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/harshabikkavilli/argus.git"
+		"url": "git+https://github.com/harshabikkavilli/argus.git"
 	},
 	"homepage": "https://github.com/harshabikkavilli/argus#readme",
 	"bugs": {
