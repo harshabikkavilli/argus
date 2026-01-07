@@ -2,9 +2,12 @@
 
 **Datadog for MCPs** — See, replay, test, and understand every MCP tool call.
 
+[![npm version](https://img.shields.io/npm/v/@argusai/cli.svg)](https://www.npmjs.com/package/@argusai/cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ## What It Does
 
-Argus is a standalone monitoring product for MCP (Model Context Protocol) servers. It records:
+Argus is a standalone monitoring dashboard for MCP (Model Context Protocol) servers. It records:
 
 - ✅ Tool calls with full parameters
 - ⏱️ Latency measurements
@@ -19,6 +22,24 @@ Then lets you:
 - 📋 Compare original vs replayed results (diff view)
 - 🔍 Debug issues visually with timeline UI
 - 📡 Real-time updates via SSE
+
+## Installation
+
+```bash
+npm install -g @argusai/cli
+```
+
+## Quick Start
+
+```bash
+# 1. Start the dashboard (opens browser automatically)
+argus dashboard --open
+
+# 2. In another terminal, wrap any MCP server
+argus wrap --api http://localhost:3000 -- npx -y @modelcontextprotocol/server-filesystem /tmp
+```
+
+That's it! Make tool calls and watch them appear in real-time.
 
 ## Architecture
 
@@ -41,27 +62,6 @@ Then lets you:
     └─────────┘       └─────────┘       └─────────┘
 ```
 
-## Installation
-
-```bash
-npm install -g argus
-# or use locally
-npm install
-```
-
-## Quick Start
-
-```bash
-# 1. Start the dashboard
-argus dashboard
-
-# 2. In another terminal, wrap any MCP server
-argus wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp
-
-# 3. Open the UI
-open http://localhost:3000
-```
-
 ## CLI Commands
 
 ### `argus dashboard`
@@ -70,15 +70,16 @@ Start the monitoring dashboard:
 
 ```bash
 argus dashboard                    # Default port 3000
+argus dashboard --open             # Open browser automatically
 argus dashboard --port 4000        # Custom port
 argus dashboard --db ./custom.db   # Custom database
 ```
 
-**Options:**
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-p, --port` | Dashboard port | 3000 |
-| `-d, --db` | Database path | ~/.argus/argus.db |
+| Flag         | Description                | Default           |
+| ------------ | -------------------------- | ----------------- |
+| `-p, --port` | Dashboard port             | 3000              |
+| `-o, --open` | Open browser automatically | false             |
+| `-d, --db`   | Database path              | ~/.argus/argus.db |
 
 ### `argus wrap`
 
@@ -88,22 +89,21 @@ Wrap an MCP server to record all tool calls:
 # Basic usage
 argus wrap -- npx -y @modelcontextprotocol/server-filesystem /tmp
 
-# With real-time dashboard updates
+# With real-time dashboard updates (recommended)
 argus wrap --api http://localhost:3000 -- npx -y @modelcontextprotocol/server-github
 
 # Custom server name (shows in dashboard)
-argus wrap --name "GitHub Server" -- npx -y @modelcontextprotocol/server-github
+argus wrap --name "GitHub" --api http://localhost:3000 -- npx -y @modelcontextprotocol/server-github
 ```
 
-**Options:**
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-d, --db` | Database path | ~/.argus/argus.db |
-| `-a, --api` | Dashboard URL for real-time updates | - |
-| `-n, --name` | Server display name | command |
-| `-t, --idle-timeout` | Seconds before new run | 60 |
-| `--redact` | Additional keys to redact | - |
-| `--no-redact` | Disable redaction | - |
+| Flag                 | Description                         | Default           |
+| -------------------- | ----------------------------------- | ----------------- |
+| `-a, --api`          | Dashboard URL for real-time updates | -                 |
+| `-n, --name`         | Server display name                 | command           |
+| `-d, --db`           | Database path                       | ~/.argus/argus.db |
+| `-t, --idle-timeout` | Seconds before new run              | 60                |
+| `--redact`           | Additional keys to redact           | -                 |
+| `--no-redact`        | Disable redaction                   | -                 |
 
 ### `argus setup`
 
@@ -137,30 +137,32 @@ Print diagnostic information for troubleshooting.
 
 2. Copy the output to your `claude_desktop_config.json`
 
-3. Start the dashboard separately:
+3. Start the dashboard:
 
    ```bash
-   argus dashboard
+   argus dashboard --open
    ```
 
 4. Restart Claude Desktop
 
+Now all MCP tool calls from Claude will be recorded in Argus!
+
 ## Configuration File
 
-Create `argus.config.json`:
+Create `argus.config.json` for advanced setups:
 
 ```json
 {
-	"database": "~/.argus/data.db",
+	"database": "~/.argus/argus.db",
 	"port": 3000,
-	"idleTimeout": 60000,
+	"idleTimeout": 60,
 	"redaction": {
 		"enabled": true,
 		"keys": ["token", "secret", "password", "api_key"]
 	},
 	"servers": {
 		"github": {
-			"name": "GitHub Server",
+			"name": "GitHub",
 			"command": "npx",
 			"args": ["-y", "@modelcontextprotocol/server-github"],
 			"env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"}
@@ -204,14 +206,8 @@ Replay any tool call and compare original vs replayed results.
    ```
 
 2. Check Claude Desktop logs:
-
    - macOS: `~/Library/Logs/Claude/`
    - Windows: `%APPDATA%\Claude\logs\`
-
-3. Verify your MCP server works:
-   ```bash
-   npx -y @modelcontextprotocol/server-filesystem /tmp
-   ```
 
 ### Dashboard Not Showing Updates
 
@@ -222,16 +218,20 @@ Replay any tool call and compare original vs replayed results.
 ## Development
 
 ```bash
+# Clone the repo
+git clone https://github.com/harshabikkavilli/argus.git
+cd argus
+
 # Install dependencies
 npm install
 
 # Build everything
 npm run build
 
-# Run dashboard (dev)
+# Run dashboard
 npm run start dashboard
 
-# Run with hot reload (UI only)
+# Development (UI hot reload)
 npm run dev:ui
 ```
 
