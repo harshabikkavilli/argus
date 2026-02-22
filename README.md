@@ -1,9 +1,12 @@
-# 👁️ Argus
+# Argus
 
 **Datadog for MCPs** — See, replay, test, and understand every MCP tool call.
 
 [![npm version](https://img.shields.io/npm/v/@argusai/cli.svg)](https://www.npmjs.com/package/@argusai/cli)
+[![downloads](https://img.shields.io/npm/dt/@argusai/cli.svg)](https://www.npmjs.com/package/@argusai/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Home page:** [Argus CLI](https://argusai-cli.pages.dev/)
 
 ## What It Does
 
