@@ -1,6 +1,6 @@
 {
 	"name": "@argusai/cli",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Debug, replay, and understand every MCP tool call - Datadog for MCPs",
 	"type": "module",
 	"main": "dist/app/cli/index.js",
